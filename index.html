@@ -242,7 +242,7 @@
             const [inputText, setInputText] = useState('');
             const [isLoading, setIsLoading] = useState(false);
             
-            const apiKey = "AQ.Ab8RN6LAv-ZJ4OBmxSedvz67ozZKNNo_4heOPqvh_SxRgpVsTg";
+            const apiKey = "";
             
             const messagesEndRef = React.useRef(null);
 
@@ -263,7 +263,7 @@
                 setIsLoading(true);
 
                 try {
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
                     
                     const systemPrompt = "Anda adalah TaniBot, asisten AI pintar yang membantu siswa SMP/SMA belajar matematika, khususnya materi Bilangan Real (Himpunan, Operasi Bilangan, dan Bilangan Berpangkat). Gunakan analogi pertanian, perkebunan, dan alam (misal: hasil panen, bibit, sawah, traktor, debit air pipa) dalam penjelasan Anda agar relevan dengan tema. Jawab dengan ringkas, ramah, memotivasi, dan gunakan bahasa Indonesia yang mudah dipahami.";
                     
