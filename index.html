@@ -2,909 +2,553 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Media Pembelajaran: Bilangan Real</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuis Matematika Agribisnis - Pangkat & Akar</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- KaTeX untuk rendering rumus matematika -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #e7e5e4; margin: 0; padding: 0; }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        /* Animasi transisi ringan */
-        .fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Background pola daun/pertanian sederhana menggunakan warna CSS */
+            background-color: #f0fdf4;
+            background-image: radial-gradient(#bbf7d0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+        .option-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .option-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .option-btn.selected {
+            background-color: #16a34a;
+            color: white;
+            border-color: #15803d;
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Styling untuk teks matematika */
+        .math {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 1.1em;
+            font-style: italic;
+        }
     </style>
 </head>
-<body class="flex justify-center min-h-screen">
+<body class="min-h-screen text-gray-800 flex items-center justify-center p-4">
 
-    <div id="root" class="w-full max-w-md bg-stone-50 min-h-screen shadow-2xl relative overflow-hidden flex flex-col"></div>
+    <!-- Container Utama -->
+    <div id="app-container" class="glass-panel w-full max-w-2xl rounded-2xl overflow-hidden animate-fade-in hidden">
+        
+        <!-- Header -->
+        <header class="bg-green-700 text-white p-6 text-center border-b-4 border-green-500">
+            <h1 class="text-2xl font-bold mb-1 flex items-center justify-center gap-2">
+                <span>🌱</span> Matematika Agribisnis <span>🌾</span>
+            </h1>
+            <p class="text-green-100 text-sm">Bentuk Pangkat & Bentuk Akar - Kelas X SMK</p>
+        </header>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+        <!-- Area Konten Dinamis -->
+        <main class="p-6 md:p-8" id="main-content">
+            <!-- Konten akan diisi oleh JavaScript -->
+        </main>
 
-        // Komponen Math untuk me-render rumus secara dinamis menggunakan KaTeX
-        const MathText = ({ math, block = false, className = "" }) => {
-            const html = katex.renderToString(math, { 
-                throwOnError: false, 
-                displayMode: block,
-                strict: false
-            });
-            return <span className={`math-container ${className}`} dangerouslySetInnerHTML={{ __html: html }} />;
+        <!-- Notifikasi / Pesan Error Custom (Pengganti Alert) -->
+        <div id="toast-container" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 hidden z-50">
+            <div id="toast-message" class="bg-red-600 text-white px-6 py-3 rounded-full shadow-lg font-medium text-sm">
+                Pesan Error
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="global-loading" class="fixed inset-0 bg-white bg-opacity-80 flex flex-col items-center justify-center z-50">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-700 mb-4"></div>
+        <p class="text-green-800 font-medium">Menghubungkan ke sistem...</p>
+    </div>
+
+    <!-- Modul Firebase & Logika Aplikasi -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Konfigurasi & Variabel Global
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sim-matematika-agri';
+        let db, auth, currentUser;
+        
+        // State Aplikasi
+        const state = {
+            studentName: '',
+            studentClass: '',
+            currentQuestionIndex: 0,
+            score: 0,
+            answers: new Array(25).fill(null), // Menyimpan indeks jawaban yang dipilih
+            leaderboard: [],
+            timeLeft: 50 * 60 // 50 menit dalam detik
         };
 
-        const Card = ({ children, className = "" }) => (
-            <div className={`bg-white p-5 rounded-2xl shadow-sm border border-stone-200 ${className}`}>
-                {children}
-            </div>
-        );
+        let timerInterval = null;
 
-        const Header = ({ title, onBack }) => (
-            <div className="bg-gradient-to-r from-green-700 to-emerald-600 text-white p-4 sticky top-0 z-10 flex items-center shadow-md">
-                {onBack && (
-                    <button onClick={onBack} className="mr-3 p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                    </button>
-                )}
-                <h1 className="text-lg font-bold flex-1">{title}</h1>
-            </div>
-        );
+        // Helper: Format Waktu (MM:SS)
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
 
-        const Home = ({ setView }) => {
-            const modules = [
-                { id: 'himpunan', title: 'Himpunan Bilangan', desc: 'Pengertian & Operasi Himpunan', icon: '🌱' },
-                { id: 'operasi', title: 'Operasi Bilangan', desc: 'Sifat Hitung & Pecahan', icon: '🚜' },
-                { id: 'pangkat', title: 'Bilangan Berpangkat', desc: 'Pangkat & Bentuk Akar', icon: '🌳' }
-            ];
-
-            return (
-                <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24 fade-in bg-stone-50">
-                    <div className="bg-gradient-to-br from-emerald-500 to-green-700 rounded-3xl p-6 text-white shadow-lg mb-4 relative overflow-hidden">
-                        <div className="absolute -bottom-4 -right-4 text-6xl opacity-10">🌿</div>
-                        <p className="text-green-100 text-sm font-medium mb-1">Materi Matematika</p>
-                        <h2 className="text-2xl font-extrabold mb-2">Bilangan Real</h2>
-                        <p className="text-sm opacity-90 leading-relaxed relative z-10">Pahami, aplikasikan, dan bernalar untuk menyelesaikan permasalahan terkait jenis dan sifat bilangan.</p>
-                    </div>
-
-                    <h3 className="font-bold text-stone-800 text-lg px-1">Materi Pembelajaran</h3>
-                    <div className="space-y-3">
-                        {modules.map((mod, idx) => (
-                            <button key={mod.id} onClick={() => setView(mod.id)} 
-                                className="w-full text-left bg-white p-4 rounded-2xl shadow-sm border border-stone-200 flex items-center active:scale-95 transition-transform">
-                                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-xl mr-4 border border-green-100">
-                                    {mod.icon}
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className="font-bold text-stone-800">{mod.title}</h4>
-                                    <p className="text-xs text-stone-500 mt-1">{mod.desc}</p>
-                                </div>
-                                <div className="text-green-600 font-bold">➔</div>
-                            </button>
-                        ))}
-                        
-                        {/* Tombol Baru untuk Kuis Akhir */}
-                        <button onClick={() => setView('kuis_akhir')} 
-                            className="w-full text-left bg-gradient-to-r from-amber-100 to-orange-100 p-4 rounded-2xl shadow-sm border border-amber-200 flex items-center active:scale-95 transition-transform mt-4">
-                            <div className="w-12 h-12 rounded-full bg-amber-200 flex items-center justify-center text-2xl mr-4 shadow-inner">
-                                🏆
-                            </div>
-                            <div className="flex-1">
-                                <h4 className="font-bold text-amber-900">Uji Panen (Kuis Akhir)</h4>
-                                <p className="text-xs text-amber-700 mt-1">Evaluasi 20 Soal Pilihan Ganda</p>
-                            </div>
-                            <div className="text-amber-600 font-bold">Mulai ➔</div>
-                        </button>
-                    </div>
-                </div>
-            );
-        };
-
-        // --- Komponen Materi Tetap Sama ---
-        const Himpunan = ({ setView }) => (
-             <div className="flex-1 overflow-y-auto p-4 pb-24 fade-in">
-                <Card className="mb-4 space-y-4">
-                    <h2 className="text-xl font-bold text-green-800 flex items-center gap-2">🌱 1. Himpunan Bilangan</h2>
-                    
-                    <div className="flex justify-center py-4">
-                        <svg className="w-full max-w-[220px] h-auto drop-shadow-md mx-auto" viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <rect x="5" y="5" width="150" height="90" rx="5" stroke="#a8a29e" strokeWidth="2" strokeDasharray="4 4" fill="#fafaf9" />
-                            <text x="10" y="18" fontSize="10" fill="#78716c" fontWeight="bold">S (Hasil Panen)</text>
-                            
-                            <circle cx="60" cy="55" r="35" stroke="#16a34a" strokeWidth="2" fill="#4ade80" fillOpacity="0.2"/>
-                            <circle cx="100" cy="55" r="35" stroke="#0ea5e9" strokeWidth="2" fill="#38bdf8" fillOpacity="0.2"/>
-                            
-                            <text x="35" y="30" fontSize="12" fill="#166534" fontWeight="bold">A</text>
-                            <text x="115" y="30" fontSize="12" fill="#0369a1" fontWeight="bold">B</text>
-                            
-                            <text x="35" y="55" fontSize="14">🍎</text>
-                            <text x="50" y="70" fontSize="14">🍓</text>
-                            
-                            <text x="105" y="55" fontSize="14">🥦</text>
-                            <text x="95" y="70" fontSize="14">🥬</text>
-                            
-                            <text x="72" y="60" fontSize="14">🍅</text>
-                        </svg>
-                    </div>
-
-                    <p className="text-sm text-stone-700 leading-relaxed">
-                        Himpunan adalah kumpulan benda atau objek yang jelas syarat keanggotaannya. Himpunan bilangan real mencakup bilangan rasional dan irasional.
-                    </p>
-                    <div className="bg-stone-50 p-3 rounded-lg text-sm border border-stone-200">
-                        <strong>Contoh:</strong><br/>
-                        A = {'{'}bilangan prima kurang dari 10{'}'}<br/>
-                        <MathText math="5 \in A" /> (5 anggota himpunan A)<br/>
-                        <MathText math="6 \notin A" /> (6 bukan anggota himpunan A)
-                    </div>
-                </Card>
-
-                <Card className="mb-4 space-y-4">
-                    <h3 className="font-bold text-lg text-stone-800 border-b border-stone-200 pb-2">Operasi Himpunan</h3>
-                    
-                    <div>
-                        <h4 className="font-semibold text-green-700 mb-1">1) Irisan (<MathText math="\cap"/>)</h4>
-                        <p className="text-sm text-stone-600 mb-1">Himpunan yang anggotanya menjadi anggota A dan anggota B.</p>
-                        <div className="bg-emerald-50 p-2 rounded text-center border border-emerald-100"><MathText math="A \cap B = \{x | x \in A \text{ dan } x \in B\}" /></div>
-                    </div>
-                    
-                    <div>
-                        <h4 className="font-semibold text-green-700 mb-1">2) Gabungan (<MathText math="\cup"/>)</h4>
-                        <p className="text-sm text-stone-600 mb-1">Himpunan yang anggotanya merupakan anggota A atau anggota B.</p>
-                        <div className="bg-emerald-50 p-2 rounded text-center border border-emerald-100"><MathText math="A \cup B = \{x | x \in A \text{ atau } x \in B\}" /></div>
-                    </div>
-                </Card>
-
-                <button onClick={() => setView('quiz_himpunan')} className="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-md hover:bg-green-700 active:bg-green-800 transition">
-                    📋 Coba Latihan Soal Himpunan
-                </button>
-            </div>
-        );
-
-        const QuizHimpunan = ({ setView }) => {
-            const [answers, setAnswers] = useState({});
-            const [submitted, setSubmitted] = useState(false);
-
-            const questions = [
-                { id: 'q1', text: "Banyak anggota himpunan (A ∩ B) ∪ C adalah 10.", isTrue: true, expl: "A = {1,2,3,4,6,9,12,18,36}, B = {3,6,9,12,15,18}, C = {2,3,5,7,11,13}. A ∩ B = {3,6,9,12,18}. (A ∩ B) ∪ C = {2,3,5,6,7,9,11,12,13,18} yang memiliki 10 anggota." }
-            ];
-
-            const handleSelect = (qId, val) => {
-                if(!submitted) setAnswers(prev => ({...prev, [qId]: val}));
-            }
-
-            return (
-                <div className="flex-1 overflow-y-auto p-4 pb-24 fade-in">
-                    <Card className="mb-4">
-                        <h2 className="text-lg font-bold text-green-800 mb-2">Contoh Soal: Himpunan</h2>
-                        <ul className="text-sm space-y-1 mb-4 bg-stone-50 p-3 rounded-lg border border-stone-200">
-                            <li><MathText math="A = "/> {'{'}faktor dari 36{'}'}</li>
-                            <li><MathText math="B = "/> {'{'}kelipatan 3 kurang dari 20{'}'}</li>
-                            <li><MathText math="C = "/> {'{'}prima kurang dari 15{'}'}</li>
-                        </ul>
-                        
-                        <div className="space-y-6">
-                            {questions.map((q, idx) => (
-                                <div key={q.id} className="border-b border-stone-100 pb-4 last:border-0">
-                                    <p className="text-sm text-stone-800 mb-3">{idx + 1}. {q.text}</p>
-                                    <div className="flex space-x-2">
-                                        <button onClick={() => handleSelect(q.id, true)} className={`flex-1 py-2 rounded-lg border ${answers[q.id] === true ? 'bg-green-600 text-white' : 'bg-white'}`}>Benar</button>
-                                        <button onClick={() => handleSelect(q.id, false)} className={`flex-1 py-2 rounded-lg border ${answers[q.id] === false ? 'bg-green-600 text-white' : 'bg-white'}`}>Salah</button>
-                                    </div>
-                                    {submitted && (
-                                        <div className="mt-2 text-sm">{answers[q.id] === q.isTrue ? '✅' : '❌'} {q.expl}</div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </Card>
-                    
-                    {!submitted ? (
-                        <button onClick={() => setSubmitted(true)} className="w-full bg-green-600 text-white py-3 rounded-xl">Cek Jawaban</button>
-                    ) : (
-                        <button onClick={() => setView('operasi')} className="w-full bg-emerald-700 text-white py-3 rounded-xl">Lanjut ke Operasi ➔</button>
-                    )}
-                </div>
-            );
-        };
-
-        const Operasi = ({ setView }) => (
-            <div className="flex-1 overflow-y-auto p-4 pb-24 fade-in">
-                <Card className="mb-4 space-y-4">
-                    <h2 className="text-xl font-bold text-green-800">🚜 2. Operasi Bilangan</h2>
-                    <p className="text-sm">Pelajari sifat komutatif, asosiatif, distributif, dan operasi pecahan.</p>
-                </Card>
-                <button onClick={() => setView('quiz_operasi')} className="w-full bg-green-600 text-white py-3 rounded-xl">Latihan Operasi</button>
-            </div>
-        );
-
-        const QuizOperasi = ({ setView }) => (
-            <div className="flex-1 p-4"><Card><p>Latihan Operasi (Singkat)</p></Card><button onClick={() => setView('pangkat')} className="w-full mt-4 bg-emerald-700 text-white py-3 rounded-xl">Lanjut Pangkat</button></div>
-        );
-
-        const Pangkat = ({ setView }) => (
-            <div className="flex-1 p-4"><Card><h2 className="text-xl font-bold text-green-800">🌳 3. Bilangan Berpangkat</h2></Card><button onClick={() => setView('quiz_pangkat')} className="w-full mt-4 bg-green-600 text-white py-3 rounded-xl">Latihan Pangkat</button></div>
-        );
-
-        const QuizPangkat = ({ setView }) => (
-            <div className="flex-1 p-4"><Card><p>Latihan Pangkat (Singkat)</p></Card><button onClick={() => setView('home')} className="w-full mt-4 bg-green-700 text-white py-3 rounded-xl">Kembali</button></div>
-        );
-
-        const FormatMessage = ({ text }) => {
-            // Deteksi pola $$...$$, \[...\], $...$, dan \(...\) untuk LaTeX
-            const regex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[\s\S]+?\$|\\\([\s\S]+?\\\))/g;
-            const parts = text.split(regex);
-            
-            return (
-                <React.Fragment>
-                    {parts.map((part, index) => {
-                        if (part.startsWith('$$') && part.endsWith('$$')) {
-                            return <MathText key={index} math={part.slice(2, -2)} block={true} className="my-2" />;
-                        } else if (part.startsWith('\\[') && part.endsWith('\\]')) {
-                            return <MathText key={index} math={part.slice(2, -2)} block={true} className="my-2" />;
-                        } else if (part.startsWith('$') && part.endsWith('$')) {
-                            return <MathText key={index} math={part.slice(1, -1)} block={false} />;
-                        } else if (part.startsWith('\\(') && part.endsWith('\\)')) {
-                            return <MathText key={index} math={part.slice(2, -2)} block={false} />;
-                        }
-                        // Render sebagai teks biasa (whitespace-pre-wrap sudah ada di parent)
-                        return <span key={index}>{part}</span>;
-                    })}
-                </React.Fragment>
-            );
-        };
-
-        const Chatbot = () => {
-            const [messages, setMessages] = useState([
-                { role: 'model', text: 'Halo! Saya TaniBot 🤖🌾. Asisten pintarmu untuk belajar Matematika.\n\nAda yang ingin kamu tanyakan tentang Himpunan, Operasi Bilangan, atau Bilangan Berpangkat?' }
-            ]);
-            const [inputText, setInputText] = useState('');
-            const [isLoading, setIsLoading] = useState(false);
-            
-            // API key telah diubah menggunakan yang Anda berikan
-            const apiKey = "AQ.Ab8RN6L2EGumrkYGfaywuTvsx0I1ATN-Wfrg1nM2r3_v8LSoyg";
-            
-            const messagesEndRef = React.useRef(null);
-
-            const scrollToBottom = () => {
-                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-            };
-
-            useEffect(() => {
-                scrollToBottom();
-            }, [messages]);
-
-            const sendMessage = async () => {
-                if (!inputText.trim() || isLoading) return;
-
-                const userMsg = { role: 'user', text: inputText };
-                setMessages(prev => [...prev, userMsg]);
-                setInputText('');
-                setIsLoading(true);
-
-                try {
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-                    
-                    const systemPrompt = "Anda adalah TaniBot, asisten AI pintar yang membantu siswa SMP/SMA belajar matematika, khususnya materi Bilangan Real (Himpunan, Operasi Bilangan, dan Bilangan Berpangkat). Gunakan analogi pertanian, perkebunan, dan alam (misal: hasil panen, bibit, sawah, traktor, debit air pipa) dalam penjelasan Anda agar relevan dengan tema. Jawab dengan ringkas, ramah, memotivasi, dan gunakan bahasa Indonesia yang mudah dipahami. PENTING: Untuk SEMUA simbol, angka kompleks, atau rumus matematika, Anda WAJIB menggunakan format LaTeX. Gunakan simbol $...$ untuk inline math (contoh: $x^2$) dan $$...$$ untuk block math (contoh: $$\\frac{1}{2}$$).";
-                    
-                    const chatHistory = messages.map(msg => ({
-                        role: msg.role,
-                        parts: [{ text: msg.text }]
-                    }));
-                    chatHistory.push({ role: 'user', parts: [{ text: userMsg.text }] });
-
-                    const payload = {
-                        contents: chatHistory,
-                        systemInstruction: {
-                            parts: [{ text: systemPrompt }]
-                        },
-                    };
-
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    const result = await response.json();
-                    
-                    if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
-                        const botText = result.candidates[0].content.parts[0].text;
-                        setMessages(prev => [...prev, { role: 'model', text: botText }]);
-                    } else {
-                        setMessages(prev => [...prev, { role: 'model', text: "Maaf, ladang pemikiran saya sedang gangguan. Coba tanya lagi ya! 🌧️" }]);
+        // Helper: Mulai Timer
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                state.timeLeft--;
+                
+                const timerDisplay = document.getElementById('timer-display');
+                if (timerDisplay) {
+                    timerDisplay.textContent = formatTime(state.timeLeft);
+                    // Peringatan visual jika waktu tersisa <= 5 menit
+                    if (state.timeLeft <= 300) { 
+                        timerDisplay.classList.remove('text-green-800');
+                        timerDisplay.classList.add('text-red-600', 'animate-pulse');
                     }
-                } catch (error) {
-                    console.error("Error calling Gemini API:", error);
-                    setMessages(prev => [...prev, { role: 'model', text: "Waduh, koneksi ke sawah terputus. Coba periksa jaringan internetmu ya! 📶🌾" }]);
-                } finally {
-                    setIsLoading(false);
                 }
-            };
 
-            return (
-                <div className="flex flex-col flex-1 overflow-hidden relative fade-in bg-stone-50">
-                    {}
-                    {/* Area Pesan Chat */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-[160px] hide-scrollbar">
-                        {messages.map((msg, idx) => (
-                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                {}
-                                <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm overflow-hidden ${msg.role === 'user' ? 'bg-green-600 text-white rounded-tr-sm' : 'bg-white border border-stone-200 text-stone-800 rounded-tl-sm whitespace-pre-wrap'}`}>
-                                    <FormatMessage text={msg.text} />
-                                </div>
-                            </div>
-                        ))}
-                        {isLoading && (
-                            <div className="flex justify-start">
-                                <div className="bg-white border border-stone-200 p-3 rounded-2xl rounded-tl-sm shadow-sm flex space-x-2">
-                                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce"></div>
-                                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
-                                </div>
-                            </div>
-                        )}
-                        <div ref={messagesEndRef} />
+                if (state.timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    showToast("⏱️ Waktu Habis! Jawaban dikirim otomatis.");
+                    calculateAndSubmit();
+                }
+            }, 1000);
+        }
+
+        // Bank Soal (25 Soal Pangkat & Akar)
+        const fullQuestions = [
+            { q: "Nilai dari <span class='math'>2<sup>5</sup></span> adalah...", o: ["10", "16", "32", "64", "128"], a: 2 },
+            { q: "Bentuk sederhana dari <span class='math'>3<sup>2</sup> &times; 3<sup>4</sup></span> adalah...", o: ["<span class='math'>3<sup>6</sup></span>", "<span class='math'>3<sup>8</sup></span>", "<span class='math'>9<sup>6</sup></span>", "<span class='math'>9<sup>8</sup></span>", "<span class='math'>6<sup>6</sup></span>"], a: 0 },
+            { q: "Bentuk sederhana dari <span class='math'>a<sup>7</sup> / a<sup>3</sup></span> adalah...", o: ["<span class='math'>a<sup>10</sup></span>", "<span class='math'>a<sup>4</sup></span>", "<span class='math'>a<sup>3</sup></span>", "<span class='math'>a<sup>21</sup></span>", "<span class='math'>a<sup>-4</sup></span>"], a: 1 },
+            { q: "Hasil dari <span class='math'>(2<sup>3</sup>)<sup>2</sup></span> adalah...", o: ["<span class='math'>2<sup>5</sup></span>", "<span class='math'>2<sup>6</sup></span>", "<span class='math'>2<sup>9</sup></span>", "<span class='math'>4<sup>5</sup></span>", "<span class='math'>8<sup>3</sup></span>"], a: 1 },
+            { q: "Nilai dari <span class='math'>5<sup>0</sup></span> adalah...", o: ["0", "1", "5", "-1", "Tak terdefinisi"], a: 1 },
+            { q: "Hasil dari <span class='math'>2<sup>-3</sup></span> adalah...", o: ["-6", "-8", "1/6", "1/8", "8"], a: 3 },
+            { q: "Bentuk akar dari <span class='math'>x<sup>1/2</sup></span> adalah...", o: ["<span class='math'>x<sup>2</sup></span>", "<span class='math'>2x</span>", "<span class='math'>&radic;x</span>", "<span class='math'><sup>3</sup>&radic;x</span>", "<span class='math'>x<sup>-2</sup></span>"], a: 2 },
+            { q: "Hasil dari <span class='math'>&radic;144</span> adalah...", o: ["10", "12", "14", "16", "18"], a: 1 },
+            { q: "Bentuk sederhana dari <span class='math'>&radic;50</span> adalah...", o: ["<span class='math'>5&radic;2</span>", "<span class='math'>2&radic;5</span>", "<span class='math'>25&radic;2</span>", "<span class='math'>5&radic;10</span>", "<span class='math'>10&radic;5</span>"], a: 0 },
+            { q: "Hasil dari <span class='math'>3&radic;2 + 5&radic;2</span> adalah...", o: ["<span class='math'>8&radic;4</span>", "<span class='math'>15&radic;2</span>", "<span class='math'>8&radic;2</span>", "<span class='math'>15&radic;4</span>", "8"], a: 2 },
+            { q: "Hasil dari <span class='math'>&radic;12 &times; &radic;3</span> adalah...", o: ["<span class='math'>&radic;15</span>", "<span class='math'>&radic;36</span>", "6", "9", "12"], a: 2 },
+            { q: "Bentuk rasional dari <span class='math'>2 / &radic;3</span> adalah...", o: ["<span class='math'>(2&radic;3) / 3</span>", "<span class='math'>2&radic;3</span>", "<span class='math'>&radic;3 / 2</span>", "<span class='math'>(3&radic;3) / 2</span>", "<span class='math'>&radic;3</span>"], a: 0 },
+            { q: "Nilai <span class='math'>x</span> yang memenuhi persamaan <span class='math'>2<sup>x</sup> = 16</span> adalah...", o: ["2", "3", "4", "5", "6"], a: 2 },
+            { q: "Bentuk rasional dari <span class='math'>5 / (2 + &radic;3)</span> adalah...", o: ["<span class='math'>5(2 - &radic;3)</span>", "<span class='math'>10 - &radic;3</span>", "<span class='math'>5(2 + &radic;3)</span>", "<span class='math'>5</span>", "<span class='math'>-5(2 - &radic;3)</span>"], a: 0 },
+            { q: "Hasil dari <span class='math'>(3a<sup>2</sup>)<sup>3</sup></span> adalah...", o: ["<span class='math'>3a<sup>6</sup></span>", "<span class='math'>9a<sup>6</sup></span>", "<span class='math'>27a<sup>5</sup></span>", "<span class='math'>27a<sup>6</sup></span>", "<span class='math'>9a<sup>5</sup></span>"], a: 3 },
+            { q: "Jika <span class='math'>a = 4</span> dan <span class='math'>b = 9</span>, maka nilai dari <span class='math'>a<sup>1/2</sup> + b<sup>1/2</sup></span> adalah...", o: ["5", "7", "13", "36", "97"], a: 0 },
+            { q: "Bentuk sederhana dari <span class='math'>&radic;72 / &radic;2</span> adalah...", o: ["4", "5", "6", "7", "8"], a: 2 },
+            { q: "Hasil dari <span class='math'>2<sup>3</sup> &times; 2<sup>-1</sup></span> adalah...", o: ["1", "2", "4", "8", "16"], a: 2 },
+            { q: "Hasil dari <span class='math'>(x<sup>2</sup>y<sup>3</sup>)<sup>4</sup></span> adalah...", o: ["<span class='math'>x<sup>6</sup>y<sup>7</sup></span>", "<span class='math'>x<sup>8</sup>y<sup>12</sup></span>", "<span class='math'>x<sup>8</sup>y<sup>7</sup></span>", "<span class='math'>x<sup>2</sup>y<sup>12</sup></span>", "<span class='math'>xy<sup>24</sup></span>"], a: 1 },
+            { q: "Hasil perkalian <span class='math'>(2&radic;5)(3&radic;2)</span> adalah...", o: ["<span class='math'>5&radic;7</span>", "<span class='math'>6&radic;7</span>", "<span class='math'>5&radic;10</span>", "<span class='math'>6&radic;10</span>", "30"], a: 3 },
+            { q: "Sebuah lahan perkebunan kelapa sawit berbentuk persegi memiliki luas <span class='math'>10<sup>4</sup></span> m<sup>2</sup>. Jika di sekeliling lahan akan dipasang pagar, berapa meter panjang kawat yang dibutuhkan untuk satu putaran pagar?", o: ["100 m", "200 m", "400 m", "800 m", "1000 m"], a: 2 },
+            { q: "Pertumbuhan bakteri pembusuk pada buah tomat mengikuti rumus <span class='math'>N = 50 &times; 2<sup>t/2</sup></span>, dengan t dalam jam. Berapa jumlah bakteri setelah 6 jam?", o: ["100", "200", "300", "400", "500"], a: 3 },
+            { q: "Volume tangki penyemprot pupuk cair berbentuk kubus adalah <span class='math'>27 &times; 10<sup>3</sup></span> cm<sup>3</sup>. Panjang sisi tangki tersebut adalah...", o: ["3 cm", "9 cm", "30 cm", "90 cm", "300 cm"], a: 2 },
+            { q: "Sebuah bibit pohon mangga mengalami pertambahan tinggi sebesar <span class='math'>&radic;3</span> cm setiap minggu. Jika diamati selama <span class='math'>&radic;12</span> minggu, pertambahan tinggi total bibit tersebut adalah...", o: ["3 cm", "4 cm", "6 cm", "9 cm", "12 cm"], a: 2 },
+            { q: "Hasil panen jagung (dalam kuintal) dirumuskan dengan <span class='math'>P(t) = 10 &times; &radic;t</span>, di mana t adalah waktu tanam dalam bulan. Jika jagung dipanen setelah 16 bulan, hasil panennya adalah...", o: ["20 kuintal", "30 kuintal", "40 kuintal", "160 kuintal", "256 kuintal"], a: 2 }
+        ];
+
+        // Format label opsi (A, B, C, D, E)
+        const optionLabels = ['A', 'B', 'C', 'D', 'E'];
+
+        // UI Elements
+        const mainContent = document.getElementById('main-content');
+        const loadingScreen = document.getElementById('global-loading');
+        const appContainer = document.getElementById('app-container');
+
+        // Helper: Tampilkan Pesan Error
+        function showToast(message) {
+            const toastContainer = document.getElementById('toast-container');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.textContent = message;
+            toastContainer.classList.remove('hidden');
+            setTimeout(() => {
+                toastContainer.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Inisialisasi Firebase & Auth
+        async function initApp() {
+            try {
+                if (typeof __firebase_config === 'undefined') {
+                    throw new Error("Konfigurasi database tidak ditemukan.");
+                }
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Autentikasi
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                currentUser = auth.currentUser;
+                
+                // Sembunyikan loading, tampilkan aplikasi
+                loadingScreen.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                
+                // Render Halaman Awal
+                renderIntro();
+
+            } catch (error) {
+                console.error("Inisialisasi gagal:", error);
+                loadingScreen.innerHTML = `
+                    <div class="text-red-600 text-center p-6 bg-red-50 rounded-lg max-w-md">
+                        <span class="text-3xl block mb-2">⚠️</span>
+                        <h2 class="font-bold text-lg mb-2">Gagal Memuat Sistem</h2>
+                        <p class="text-sm">Gagal terhubung ke database. Silakan coba muat ulang halaman. (${error.message})</p>
+                    </div>`;
+            }
+        }
+
+        // Render Halaman 1: Identitas
+        function renderIntro() {
+            mainContent.innerHTML = `
+                <div class="text-center mb-6">
+                    <h2 class="text-xl font-semibold text-green-800 mb-2">Selamat Datang!</h2>
+                    <p class="text-gray-600 text-sm">Silakan isi identitas diri Anda sebelum memulai evaluasi.</p>
+                </div>
+                
+                <form id="intro-form" class="space-y-4">
+                    <div>
+                        <label for="student-name" class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
+                        <input type="text" id="student-name" required placeholder="Masukkan nama Anda" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition">
+                    </div>
+                    
+                    <div>
+                        <label for="student-class" class="block text-sm font-medium text-gray-700 mb-2">Pilih Kelas</label>
+                        <select id="student-class" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition bg-white appearance-none cursor-pointer">
+                            <option value="" disabled selected>Pilih kelas Anda...</option>
+                            <option value="X-A">Kelas X-A</option>
+                            <option value="X-B">Kelas X-B</option>
+                        </select>
                     </div>
 
-                    {/* Area Input Chat */}
-                    <div className="absolute bottom-[70px] left-0 w-full bg-stone-100/90 backdrop-blur-sm border-t border-stone-200 p-3">
-                        <div className="flex items-end gap-2 max-w-md mx-auto">
-                            <textarea 
-                                value={inputText}
-                                onChange={(e) => setInputText(e.target.value)}
-                                onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                                placeholder="Tanya TaniBot..."
-                                className="flex-1 bg-white border border-stone-300 rounded-xl p-3 max-h-32 min-h-[44px] text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 resize-none hide-scrollbar"
-                                rows="1"
-                            />
-                            <button 
-                                onClick={sendMessage}
-                                disabled={isLoading || !inputText.trim()}
-                                className="bg-gradient-to-br from-green-500 to-green-700 text-white p-2 rounded-xl w-11 h-11 mb-0.5 flex items-center justify-center flex-shrink-0 disabled:opacity-50 hover:shadow-md transition-all active:scale-95"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                                </svg>
-                            </button>
-                        </div>
+                    <button type="submit" class="w-full mt-6 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200 flex justify-center items-center gap-2">
+                        Mulai Kuis <span>🚀</span>
+                    </button>
+                    
+                    <button type="button" id="btn-view-leaderboard" class="w-full mt-2 bg-transparent text-green-700 hover:text-green-800 font-medium py-2 px-4 rounded-lg transition duration-200">
+                        Lihat Papan Peringkat (Leaderboard)
+                    </button>
+                </form>
+            `;
+
+            document.getElementById('intro-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('student-name').value.trim();
+                const studentClass = document.getElementById('student-class').value;
+                
+                if (name.length < 3) {
+                    showToast("Nama harus minimal 3 karakter.");
+                    return;
+                }
+
+                state.studentName = name;
+                state.studentClass = studentClass;
+                state.currentQuestionIndex = 0;
+                state.score = 0;
+                state.answers.fill(null);
+                state.timeLeft = 50 * 60; // Reset waktu menjadi 50 menit
+                
+                startTimer();
+                renderQuiz();
+            });
+
+            document.getElementById('btn-view-leaderboard').addEventListener('click', () => {
+                renderLeaderboard();
+            });
+        }
+
+        // Render Halaman 2: Kuis
+        function renderQuiz() {
+            const q = fullQuestions[state.currentQuestionIndex];
+            const progress = ((state.currentQuestionIndex) / fullQuestions.length) * 100;
+            const isLast = state.currentQuestionIndex === fullQuestions.length - 1;
+            
+            // Cek jika sudah dijawab sebelumnya (bisa dikembangkan utk fitur 'kembali', tp skrg maju saja)
+            const currentSelected = state.answers[state.currentQuestionIndex];
+
+            // Penentuan warna timer berdasarkan waktu sisa (Merah jika <= 5 menit)
+            const timerColorClass = state.timeLeft <= 300 ? 'text-red-600 animate-pulse' : 'text-green-800';
+
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-4 bg-green-50 p-3 rounded-xl border border-green-200 shadow-sm">
+                    <div class="text-sm font-semibold text-green-800 flex items-center gap-2">
+                        <span class="text-xl">⏱️</span> 
+                        <span>Waktu Sisa:</span>
+                        <span id="timer-display" class="text-lg font-bold ${timerColorClass}">${formatTime(state.timeLeft)}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 font-medium">${state.studentName} | ${state.studentClass}</div>
+                </div>
+
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-semibold text-green-700">Soal ${state.currentQuestionIndex + 1} dari ${fullQuestions.length}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-green-600 h-2.5 rounded-full transition-all duration-300" style="width: ${progress}%"></div>
                     </div>
                 </div>
-            );
-        };
 
-        // --- KOMPONEN KUIS AKHIR (20 SOAL) ---
-        const KuisAkhir = ({ setView }) => {
-            const [currentQuestion, setCurrentQuestion] = useState(0);
-            const [answers, setAnswers] = useState({}); // Menyimpan jawaban: { questionIndex: selectedOptionIndex }
-            const [showResult, setShowResult] = useState(false);
+                <div class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm mb-6 min-h-[120px] flex items-center">
+                    <p class="text-lg text-gray-800 w-full">${q.q}</p>
+                </div>
 
-            // Data 20 Soal berdasarkan PDF (Himpunan, Debit Air/Operasi, Pangkat)
-            const quizData = [
-                // --- Topik: Himpunan (6 Soal) ---
-                {
-                    topic: "Himpunan",
-                    question: "Diketahui S = {x | 1 ≤ x ≤ 10, x bilangan cacah}. A = {2, 3, 5, 7} dan B = {1, 3, 5, 7, 9}. Tentukan anggota dari A ∩ B!",
-                    illustration: () => (
-                        <svg className="w-32 h-24 mx-auto my-2" viewBox="0 0 120 70">
-                            <circle cx="45" cy="35" r="30" stroke="#16a34a" strokeWidth="2" fill="none"/>
-                            <circle cx="75" cy="35" r="30" stroke="#0ea5e9" strokeWidth="2" fill="none"/>
-                            <text x="25" y="25" fontSize="10">2</text>
-                            <text x="55" y="35" fontSize="12" fill="red" fontWeight="bold">?</text>
-                            <text x="90" y="25" fontSize="10">1, 9</text>
-                            <text x="32" y="60" fontSize="10">A</text><text x="78" y="60" fontSize="10">B</text>
-                        </svg>
-                    ),
-                    options: [
-                        { text: "{3, 5, 7}", isCorrect: true },
-                        { text: "{2, 3, 5, 7}", isCorrect: false },
-                        { text: "{1, 2, 3, 5, 7, 9}", isCorrect: false },
-                        { text: "{1, 9}", isCorrect: false },
-                        { text: "{1, 2, 3, 5, 7}", isCorrect: false }
-                    ],
-                    explanation: "Irisan (∩) adalah anggota yang ada di A dan juga ada di B. Angka yang sama adalah 3, 5, dan 7."
-                },
-                {
-                    topic: "Himpunan",
-                    question: "Jika A = {faktor dari 12} dan B = {kelipatan 2 kurang dari 10}. Tentukan A ∪ B!",
-                    illustration: () => <div className="text-4xl text-center my-2">🍎 ∪ 🍇</div>,
-                    options: [
-                        { text: "{2, 4, 6}", isCorrect: false },
-                        { text: "{1, 2, 3, 4, 6, 8, 12}", isCorrect: true },
-                        { text: "{1, 2, 3, 4, 6, 12}", isCorrect: false },
-                        { text: "{1, 3, 12}", isCorrect: false },
-                        { text: "{2, 3, 4, 6, 8, 12}", isCorrect: false }
-                    ],
-                    explanation: "A = {1, 2, 3, 4, 6, 12}, B = {2, 4, 6, 8}. Gabungan (∪) menggabungkan semua anggotanya tanpa duplikasi."
-                },
-                {
-                    topic: "Himpunan",
-                    question: "Diketahui himpunan P = {x | 2 < x ≤ 8, x bilangan prima}. Anggota himpunan P adalah...",
-                    illustration: () => <div className="text-4xl text-center my-2">🔢</div>,
-                    options: [
-                        { text: "{2, 3, 5, 7}", isCorrect: false },
-                        { text: "{3, 5, 7}", isCorrect: true },
-                        { text: "{3, 5, 7, 9}", isCorrect: false },
-                        { text: "{5, 7}", isCorrect: false },
-                        { text: "{2, 3, 5, 7, 9}", isCorrect: false }
-                    ],
-                    explanation: "Bilangan prima antara 2 (tidak termasuk) hingga 8 adalah 3, 5, dan 7."
-                },
-                {
-                    topic: "Himpunan",
-                    question: "Dalam satu kelas terdapat 30 siswa. 20 siswa suka Matematika, 15 suka Biologi, dan 10 suka keduanya. Banyak siswa yang tidak suka keduanya adalah...",
-                    illustration: () => (
-                         <svg className="w-32 h-24 mx-auto my-2" viewBox="0 0 120 70">
-                            <rect x="5" y="5" width="110" height="60" fill="#f5f5f4" stroke="#ccc"/>
-                            <circle cx="45" cy="35" r="25" fill="#fca5a5" fillOpacity="0.5"/>
-                            <circle cx="75" cy="35" r="25" fill="#86efac" fillOpacity="0.5"/>
-                            <text x="60" y="38" fontSize="10" textAnchor="middle">10</text>
-                            <text x="10" y="15" fontSize="8">S=30</text>
-                            <text x="10" y="60" fontSize="12">?</text>
-                        </svg>
-                    ),
-                    options: [
-                        { text: "5 siswa", isCorrect: true },
-                        { text: "10 siswa", isCorrect: false },
-                        { text: "15 siswa", isCorrect: false },
-                        { text: "25 siswa", isCorrect: false },
-                        { text: "20 siswa", isCorrect: false }
-                    ],
-                    explanation: "Suka M saja = 20-10=10. Suka B saja = 15-10=5. Total yg suka = 10+5+10 = 25. Tidak suka keduanya = 30 - 25 = 5."
-                },
-                {
-                    topic: "Himpunan",
-                    question: "Simbol himpunan kosong dilambangkan dengan...",
-                    illustration: () => <div className="text-4xl text-center my-2">🪹</div>,
-                    options: [
-                        { text: "E", isCorrect: false },
-                        { text: "∅ atau {}", isCorrect: true },
-                        { text: "S", isCorrect: false },
-                        { text: "{0}", isCorrect: false },
-                        { text: "[0]", isCorrect: false }
-                    ],
-                    explanation: "Himpunan kosong tidak memiliki anggota, disimbolkan dengan ∅ atau {}."
-                },
-                {
-                    topic: "Himpunan",
-                    question: "Diketahui S = {1,2,3,4,5,6}, A={2,4,6}. Maka Komplemen dari A (A^c) adalah...",
-                    illustration: () => <div className="text-4xl text-center my-2">🔄</div>,
-                    options: [
-                        { text: "{2, 4, 6}", isCorrect: false },
-                        { text: "{1, 3, 5}", isCorrect: true },
-                        { text: "S", isCorrect: false },
-                        { text: "{}", isCorrect: false },
-                        { text: "{5, 6}", isCorrect: false }
-                    ],
-                    explanation: "Komplemen A adalah anggota semesta (S) yang BUKAN merupakan anggota A."
-                },
+                <div class="space-y-3" id="options-container">
+                    ${q.o.map((opt, index) => `
+                        <button class="option-btn w-full text-left p-4 border border-gray-200 rounded-xl hover:bg-green-50 focus:outline-none flex items-center gap-4 ${currentSelected === index ? 'selected' : 'bg-white'}" data-index="${index}">
+                            <span class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full border border-current text-sm font-bold">${optionLabels[index]}</span>
+                            <span class="flex-grow">${opt}</span>
+                        </button>
+                    `).join('')}
+                </div>
 
-                // --- Topik: Operasi Bilangan / Debit Air (8 Soal) ---
-                {
-                    topic: "Operasi Bilangan",
-                    question: "Jika debit air Pipa 1 adalah 12 liter/menit, dan Pipa 2 adalah 3/4 dari debit Pipa 1. Berapa debit Pipa 2?",
-                    illustration: () => <div className="text-4xl text-center my-2">🚰</div>,
-                    options: [
-                        { text: "6 liter/menit", isCorrect: false },
-                        { text: "8 liter/menit", isCorrect: false },
-                        { text: "9 liter/menit", isCorrect: true },
-                        { text: "10 liter/menit", isCorrect: false },
-                        { text: "12 liter/menit", isCorrect: false }
-                    ],
-                    explanation: "3/4 x 12 = 3 x 3 = 9 liter/menit."
-                },
-                {
-                    topic: "Operasi Bilangan",
-                    question: "Diketahui persamaan debit pipa: P1 × P2 = 120 dan P2 × P3 = 180. Jika P2 adalah bilangan terbesar yang memenuhi (FPB), maka nilai P2 adalah...",
-                    illustration: () => (
-                        <svg className="w-32 h-24 mx-auto my-2" viewBox="0 0 120 70">
-                            <rect x="10" y="20" width="30" height="30" fill="#93c5fd" rx="4"/>
-                            <text x="25" y="40" fontSize="12" textAnchor="middle">P1</text>
-                            <text x="45" y="40" fontSize="12">×</text>
-                            <rect x="55" y="20" width="30" height="30" fill="#fca5a5" rx="4"/>
-                            <text x="70" y="40" fontSize="12" textAnchor="middle">P2</text>
-                            <text x="90" y="40" fontSize="12">= 120</text>
-                        </svg>
-                    ),
-                    options: [
-                        { text: "30", isCorrect: false },
-                        { text: "40", isCorrect: false },
-                        { text: "60", isCorrect: true },
-                        { text: "120", isCorrect: false },
-                        { text: "15", isCorrect: false }
-                    ],
-                    explanation: "Nilai P2 harus merupakan faktor persekutuan dari 120 dan 180. Nilai terbesarnya adalah FPB(120, 180) = 60."
-                },
-                {
-                    topic: "Operasi Bilangan",
-                    question: "Melanjutkan soal sebelumnya (P1×P2=120, P2×P3=180). Jika P2 = 60, berapakah jumlah debit ketiga pipa (P1 + P2 + P3)?",
-                    illustration: () => <div className="text-4xl text-center my-2">💧💧💧</div>,
-                    options: [
-                        { text: "300", isCorrect: false },
-                        { text: "65", isCorrect: true },
-                        { text: "35", isCorrect: false },
-                        { text: "75", isCorrect: false },
-                        { text: "180", isCorrect: false }
-                    ],
-                    explanation: "Jika P2=60, maka P1 = 120/60 = 2. Dan P3 = 180/60 = 3. Total = 2 + 60 + 3 = 65."
-                },
-                {
-                    topic: "Operasi Bilangan",
-                    question: "Sifat operasi hitung (a × b) × c = a × (b × c) disebut sifat...",
-                    illustration: () => <div className="text-4xl text-center my-2">🤝</div>,
-                    options: [
-                        { text: "Komutatif", isCorrect: false },
-                        { text: "Asosiatif", isCorrect: true },
-                        { text: "Distributif", isCorrect: false },
-                        { text: "Identitas", isCorrect: false },
-                        { text: "Tertutup", isCorrect: false }
-                    ],
-                    explanation: "Asosiatif adalah sifat pengelompokan operasi hitung."
-                },
-                {
-                    topic: "Operasi Bilangan",
-                    question: "Hasil dari 3/4 + 1/6 adalah...",
-                    illustration: () => (
-                        <svg className="w-24 h-24 mx-auto my-2" viewBox="0 0 100 100">
-                            <circle cx="30" cy="50" r="20" fill="#fde047" stroke="#000" strokeDasharray="31.4"/>
-                            <text x="55" y="55" fontSize="20">+</text>
-                            <circle cx="80" cy="50" r="20" fill="#86efac" stroke="#000" strokeDasharray="10"/>
-                        </svg>
-                    ),
-                    options: [
-                        { text: "4/10", isCorrect: false },
-                        { text: "11/12", isCorrect: true },
-                        { text: "5/12", isCorrect: false },
-                        { text: "4/24", isCorrect: false },
-                        { text: "10/12", isCorrect: false }
-                    ],
-                    explanation: "KPK dari 4 dan 6 adalah 12. (9/12) + (2/12) = 11/12."
-                },
-                {
-                    topic: "Operasi Bilangan",
-                    question: "Hasil dari operasi campuran: 15 - 3 × 4 + 2 =",
-                    illustration: () => <div className="text-4xl text-center my-2">🧮</div>,
-                    options: [
-                        { text: "50", isCorrect: false },
-                        { text: "5", isCorrect: true },
-                        { text: "3", isCorrect: false },
-                        { text: "26", isCorrect: false },
-                        { text: "20", isCorrect: false }
-                    ],
-                    explanation: "Kerjakan perkalian dulu: 3×4 = 12. Lalu dari kiri: 15 - 12 + 2 = 3 + 2 = 5."
-                },
-                {
-                    topic: "Operasi Bilangan",
-                    question: "Sebuah tangki air bervolume 1000 liter. Jika dialiri air dengan debit 25 liter/menit, waktu yang dibutuhkan agar tangki penuh adalah...",
-                    illustration: () => (
-                        <svg className="w-24 h-24 mx-auto my-2" viewBox="0 0 100 100">
-                            <path d="M20,20 L20,80 L80,80 L80,20" fill="none" stroke="#64748b" strokeWidth="4"/>
-                            <rect x="22" y="50" width="56" height="28" fill="#38bdf8" opacity="0.6"/>
-                            <path d="M40,5 L40,20" stroke="#38bdf8" strokeWidth="6" strokeDasharray="2"/>
-                        </svg>
-                    ),
-                    options: [
-                        { text: "25 menit", isCorrect: false },
-                        { text: "30 menit", isCorrect: false },
-                        { text: "40 menit", isCorrect: true },
-                        { text: "50 menit", isCorrect: false },
-                        { text: "60 menit", isCorrect: false }
-                    ],
-                    explanation: "Waktu = Volume / Debit = 1000 / 25 = 40 menit."
-                },
-                {
-                    topic: "Operasi Bilangan",
-                    question: "Berapakah hasil dari 2,5 ÷ 0,5 ?",
-                    illustration: () => <div className="text-4xl text-center my-2">➗</div>,
-                    options: [
-                        { text: "5", isCorrect: true },
-                        { text: "0,5", isCorrect: false },
-                        { text: "2", isCorrect: false },
-                        { text: "1,25", isCorrect: false },
-                        { text: "0,05", isCorrect: false }
-                    ],
-                    explanation: "Sama dengan membagi 25 dengan 5, hasilnya adalah 5."
-                },
+                <div class="mt-8 flex justify-end">
+                    <button id="btn-next" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-6 rounded-lg shadow disabled:opacity-50 disabled:cursor-not-allowed transition" disabled>
+                        ${isLast ? 'Selesai & Kirim' : 'Selanjutnya ➔'}
+                    </button>
+                </div>
+            `;
 
-                // --- Topik: Bilangan Berpangkat (6 Soal) ---
-                {
-                    topic: "Pangkat",
-                    question: "Bentuk sederhana dari x³ × x⁵ adalah...",
-                    illustration: () => <div className="text-xl text-center my-2 font-bold font-serif italic text-green-700">x³ · x⁵</div>,
-                    options: [
-                        { text: "x¹⁵", isCorrect: false },
-                        { text: "x⁸", isCorrect: true },
-                        { text: "x²", isCorrect: false },
-                        { text: "2x⁸", isCorrect: false },
-                        { text: "x⁷", isCorrect: false }
-                    ],
-                    explanation: "Pada perkalian bilangan berpangkat dengan basis sama, pangkatnya dijumlahkan: 3 + 5 = 8."
-                },
-                {
-                    topic: "Pangkat",
-                    question: "Hasil dari (2³)² adalah...",
-                    illustration: () => <div className="text-xl text-center my-2 font-bold font-serif italic text-green-700">(2³)²</div>,
-                    options: [
-                        { text: "2⁵", isCorrect: false },
-                        { text: "2⁶", isCorrect: true },
-                        { text: "2⁹", isCorrect: false },
-                        { text: "128", isCorrect: false },
-                        { text: "2³", isCorrect: false }
-                    ],
-                    explanation: "Pangkat dipangkatkan lagi, maka pangkatnya dikalikan: 3 × 2 = 6. Hasilnya 2⁶ = 64."
-                },
-                {
-                    topic: "Pangkat",
-                    question: "Berdasarkan materi PDF, bentuk pangkat pecahan dari √x (akar kuadrat x) adalah...",
-                    illustration: () => <div className="text-3xl text-center my-2 font-serif text-green-700">√x</div>,
-                    options: [
-                        { text: "x½", isCorrect: true },
-                        { text: "x²", isCorrect: false },
-                        { text: "x⁻¹", isCorrect: false },
-                        { text: "x⅓", isCorrect: false },
-                        { text: "x⁻½", isCorrect: false }
-                    ],
-                    explanation: "Akar kuadrat sama dengan pangkat 1/2."
-                },
-                {
-                    topic: "Pangkat",
-                    question: "Nilai dari 5⁰ adalah...",
-                    illustration: () => <div className="text-3xl text-center my-2 font-serif text-green-700">5⁰</div>,
-                    options: [
-                        { text: "0", isCorrect: false },
-                        { text: "5", isCorrect: false },
-                        { text: "1", isCorrect: true },
-                        { text: "Tak terhingga", isCorrect: false },
-                        { text: "0,5", isCorrect: false }
-                    ],
-                    explanation: "Setiap bilangan real bukan nol yang dipangkatkan dengan 0 hasilnya adalah 1."
-                },
-                {
-                    topic: "Pangkat",
-                    question: "Bentuk rasional dari 2 / √3 adalah...",
-                    illustration: () => (
-                        <div className="flex justify-center items-center my-2">
-                           <div className="flex flex-col items-center border-r-2 border-stone-300 pr-4 mr-4">
-                               <span className="border-b-2 border-black w-4 text-center">2</span>
-                               <span>√3</span>
-                           </div>
-                           <span className="text-xl">?</span>
-                        </div>
-                    ),
-                    options: [
-                        { text: "(2/3) √3", isCorrect: true },
-                        { text: "2 √3", isCorrect: false },
-                        { text: "√6", isCorrect: false },
-                        { text: "3/2 √3", isCorrect: false },
-                        { text: "2", isCorrect: false }
-                    ],
-                    explanation: "Kalikan pembilang dan penyebut dengan √3. (2 × √3) / (√3 × √3) = (2√3)/3."
-                },
-                {
-                    topic: "Pangkat",
-                    question: "Diketahui bentuk aljabar ( x^(2/3) / x^2 ). Berapakah pangkat dari x pada bentuk sederhananya?",
-                    illustration: () => <div className="text-4xl text-center my-2">📉</div>,
-                    options: [
-                        { text: "4/3", isCorrect: false },
-                        { text: "-4/3", isCorrect: true },
-                        { text: "8/3", isCorrect: false },
-                        { text: "-8/3", isCorrect: false },
-                        { text: "-2/3", isCorrect: false }
-                    ],
-                    explanation: "Pembagian pangkat dengan basis sama, pangkat dikurangi: 2/3 - 2 = 2/3 - 6/3 = -4/3."
-                }
-            ];
+            const optionBtns = document.querySelectorAll('.option-btn');
+            const nextBtn = document.getElementById('btn-next');
 
-            const handleAnswer = (index) => {
-                // Cegah penggantian jawaban jika sudah dijawab
-                if (answers[currentQuestion] !== undefined) return;
-                setAnswers(prev => ({...prev, [currentQuestion]: index}));
-            };
-
-            const calculateScore = () => {
-                let s = 0;
-                Object.keys(answers).forEach(qIdx => {
-                    if (quizData[qIdx].options[answers[qIdx]].isCorrect) s++;
-                });
-                return s;
-            };
-
-            const restartQuiz = () => {
-                setCurrentQuestion(0);
-                setAnswers({});
-                setShowResult(false);
-            };
-
-            const score = calculateScore();
-            const currentQ = quizData[currentQuestion];
-            const isAnswered = answers[currentQuestion] !== undefined;
-            const selectedAnswer = answers[currentQuestion];
-
-            if (showResult) {
-                return (
-                    <div className="flex-1 p-6 flex flex-col items-center justify-center fade-in text-center relative z-10 bg-stone-100">
-                        <div className="bg-white p-8 rounded-3xl shadow-lg w-full max-w-sm border border-stone-200 relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-4 bg-gradient-to-r from-green-400 to-emerald-600"></div>
-                            <div className="text-6xl mb-4">{score >= 15 ? '🏆' : score >= 10 ? '🌱' : '💧'}</div>
-                            <h2 className="text-2xl font-bold text-stone-800 mb-2">Hasil Evaluasi</h2>
-                            <p className="text-stone-500 mb-6">Uji Panen Matematika</p>
-                            
-                            <div className="flex justify-center items-end gap-2 mb-6">
-                                <span className="text-5xl font-black text-green-600">{score}</span>
-                                <span className="text-xl text-stone-400 mb-1">/ 20</span>
-                            </div>
-
-                            <p className="text-sm text-stone-600 mb-8 px-4">
-                                {score >= 15 ? "Luar biasa! Hasil panen pemahamanmu sangat melimpah. Kamu siap ke tahap selanjutnya!" : 
-                                 score >= 10 ? "Kerja bagus! Bibit pemahamanmu sudah tumbuh, perlu sedikit disiram lagi agar lebih mantap." : 
-                                 "Tetap semangat! Mari kita bajak lagi materinya perlahan-lahan dari awal."}
-                            </p>
-
-                            <div className="space-y-3">
-                                <button onClick={restartQuiz} className="w-full bg-emerald-100 text-emerald-800 font-bold py-3 rounded-xl hover:bg-emerald-200 transition">
-                                    🔄 Ulangi Kuis
-                                </button>
-                                <button onClick={() => setView('home')} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl shadow-md hover:bg-green-700 transition">
-                                    🏡 Kembali ke Beranda
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                );
+            // Set state awal tombol next jika sudah ada jawaban
+            if (currentSelected !== null) {
+                nextBtn.disabled = false;
             }
 
-            return (
-                <div className="flex-1 overflow-y-auto p-4 pb-24 fade-in bg-stone-100 relative">
-                    {/* Header Progress */}
-                    <div className="flex items-center justify-between mb-4 px-2">
-                        <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">{currentQ.topic}</span>
-                        <span className="text-sm font-bold bg-white px-3 py-1 rounded-full shadow-sm text-green-700 border border-green-100">
-                            Soal {currentQuestion + 1} / 20
-                        </span>
+            optionBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    // Hapus kelas selected dari semua
+                    optionBtns.forEach(b => b.classList.remove('selected', 'bg-green-600', 'text-white', 'border-green-700'));
+                    
+                    // Tambah ke yg diklik
+                    this.classList.add('selected');
+                    
+                    // Simpan jawaban
+                    state.answers[state.currentQuestionIndex] = parseInt(this.getAttribute('data-index'));
+                    
+                    // Aktifkan tombol next
+                    nextBtn.disabled = false;
+                });
+            });
+
+            nextBtn.addEventListener('click', () => {
+                if (isLast) {
+                    calculateAndSubmit();
+                } else {
+                    state.currentQuestionIndex++;
+                    renderQuiz();
+                }
+            });
+        }
+
+        // Kalkulasi Skor dan Simpan ke Database
+        async function calculateAndSubmit() {
+            // Hentikan timer
+            clearInterval(timerInterval);
+
+            // Hitung skor (4 poin per soal, total 25 soal = 100 max)
+            state.score = 0;
+            state.answers.forEach((ans, idx) => {
+                if (ans === fullQuestions[idx].a) {
+                    state.score += 4;
+                }
+            });
+
+            // Tampilkan loading saat menyimpan
+            mainContent.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12 text-center">
+                    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-700 mb-4"></div>
+                    <h3 class="text-lg font-semibold text-green-800">Menyimpan hasil Anda...</h3>
+                    <p class="text-sm text-gray-500 mt-2">Mohon tunggu sebentar.</p>
+                </div>
+            `;
+
+            if (!currentUser) {
+                showToast("Sesi tidak valid. Tidak dapat menyimpan skor.");
+                renderResult();
+                return;
+            }
+
+            try {
+                // RULE 1: Strict Paths -> /artifacts/{appId}/public/data/{collectionName}
+                const leaderboardRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+                
+                await addDoc(leaderboardRef, {
+                    userId: currentUser.uid, // Simpan UID pengguna (walau anon)
+                    name: state.studentName,
+                    className: state.studentClass,
+                    score: state.score,
+                    timestamp: serverTimestamp()
+                });
+                
+                renderResult();
+            } catch (error) {
+                console.error("Gagal menyimpan skor:", error);
+                showToast("Terjadi kesalahan saat menyimpan data. Skor tetap ditampilkan.");
+                renderResult(); // Tetap tampilkan hasil meski gagal simpan
+            }
+        }
+
+        // Render Halaman 3: Hasil
+        function renderResult() {
+            let message = "";
+            let emoji = "";
+            
+            if (state.score >= 85) { message = "Luar Biasa! Pertahankan prestasimu."; emoji = "🏆"; }
+            else if (state.score >= 70) { message = "Kerja Bagus! Tingkatkan terus belajarmu."; emoji = "🌟"; }
+            else if (state.score >= 50) { message = "Cukup baik, tapi masih perlu banyak latihan."; emoji = "👍"; }
+            else { message = "Jangan menyerah! Pelajari lagi materinya dengan tekun."; emoji = "📚"; }
+
+            mainContent.innerHTML = `
+                <div class="text-center py-8">
+                    <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-green-100 text-5xl mb-4 shadow-inner">
+                        ${emoji}
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-1">Kuis Selesai!</h2>
+                    <p class="text-gray-600 mb-6">Terima kasih, <strong>${state.studentName}</strong> (${state.studentClass})</p>
+                    
+                    <div class="bg-white rounded-2xl border-2 border-green-200 p-6 max-w-sm mx-auto shadow-sm mb-6">
+                        <p class="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-1">Skor Akhir</p>
+                        <div class="text-5xl font-black text-green-600 mb-2">${state.score}</div>
+                        <p class="text-sm text-green-800 font-medium">${message}</p>
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="w-full bg-stone-200 h-2 rounded-full mb-6 overflow-hidden">
-                        <div 
-                            className="bg-green-500 h-full transition-all duration-500 ease-out" 
-                            style={{ width: `${((currentQuestion) / 20) * 100}%` }}
-                        ></div>
+                    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                        <button id="btn-to-leaderboard" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-6 rounded-lg shadow transition">
+                            Lihat Leaderboard
+                        </button>
+                        <button id="btn-restart" class="bg-white hover:bg-gray-50 text-green-700 border border-green-300 font-semibold py-2.5 px-6 rounded-lg shadow-sm transition">
+                            Kembali ke Awal
+                        </button>
                     </div>
+                </div>
+            `;
 
-                    <Card className="mb-6 relative">
-                        {/* Ilustrasi */}
-                        {currentQ.illustration && (
-                            <div className="mb-4 flex justify-center bg-stone-50 rounded-lg p-2 border border-stone-100">
-                                {currentQ.illustration()}
+            document.getElementById('btn-to-leaderboard').addEventListener('click', renderLeaderboard);
+            document.getElementById('btn-restart').addEventListener('click', renderIntro);
+        }
+
+        // Render Halaman 4: Leaderboard
+        function renderLeaderboard() {
+            // Tampilkan UI Loading List
+            mainContent.innerHTML = `
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-green-800 flex items-center gap-2">
+                        <span>🏆</span> Papan Peringkat
+                    </h2>
+                    <button id="btn-back-from-lb" class="text-sm text-green-600 hover:text-green-800 font-medium bg-green-50 px-3 py-1.5 rounded-md">
+                        Kembali
+                    </button>
+                </div>
+                <div id="leaderboard-list" class="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div class="text-center py-8 text-gray-500">Memuat data peringkat...</div>
+                </div>
+            `;
+
+            document.getElementById('btn-back-from-lb').addEventListener('click', renderIntro);
+
+            if (!currentUser) return;
+
+            // Ambil data (RULE 2: No Complex Queries, fetch all then sort in memory)
+            const leaderboardRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+            
+            // onSnapshot untuk data realtime
+            const unsubscribe = onSnapshot(leaderboardRef, (snapshot) => {
+                let data = [];
+                snapshot.forEach(doc => {
+                    data.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Sorting in memory (Score DESC, then Time ASC jika ada yg sama)
+                data.sort((a, b) => {
+                    if (b.score !== a.score) {
+                        return b.score - a.score;
+                    }
+                    // Jika skor sama, urutkan berdasarkan waktu submit lebih dulu (opsional, perlu timestamp valid)
+                    const timeA = a.timestamp ? a.timestamp.toMillis() : 0;
+                    const timeB = b.timestamp ? b.timestamp.toMillis() : 0;
+                    return timeA - timeB; 
+                });
+
+                // Tampilkan top 50 saja
+                const topData = data.slice(0, 50);
+                
+                const listContainer = document.getElementById('leaderboard-list');
+                if(!listContainer) return; // if user navigated away
+
+                if (topData.length === 0) {
+                    listContainer.innerHTML = `<div class="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">Belum ada data skor. Jadilah yang pertama!</div>`;
+                    return;
+                }
+
+                listContainer.innerHTML = topData.map((item, index) => {
+                    let rankBadge = `<span class="w-8 text-center font-bold text-gray-500">${index + 1}</span>`;
+                    if (index === 0) rankBadge = `<span class="w-8 text-center text-xl" title="Peringkat 1">🥇</span>`;
+                    if (index === 1) rankBadge = `<span class="w-8 text-center text-xl" title="Peringkat 2">🥈</span>`;
+                    if (index === 2) rankBadge = `<span class="w-8 text-center text-xl" title="Peringkat 3">🥉</span>`;
+
+                    // Highlight current user's entry (if matched by name/class for simplicity in this demo, ideally by userId if available in state)
+                    const isMe = (item.name === state.studentName && item.className === state.studentClass);
+                    const bgClass = isMe ? 'bg-green-100 border-green-300' : 'bg-white border-gray-100';
+
+                    return `
+                        <div class="flex items-center justify-between p-3 border rounded-lg ${bgClass} shadow-sm transition hover:shadow-md">
+                            <div class="flex items-center gap-3">
+                                ${rankBadge}
+                                <div>
+                                    <div class="font-semibold text-gray-800 ${isMe ? 'text-green-800' : ''}">${item.name}</div>
+                                    <div class="text-xs text-gray-500">Kelas ${item.className}</div>
+                                </div>
                             </div>
-                        )}
-                        
-                        <p className="text-stone-800 font-medium leading-relaxed mb-6 text-[15px]">
-                            {currentQ.question}
-                        </p>
-
-                        <div className="space-y-3">
-                            {currentQ.options.map((opt, idx) => (
-                                <button 
-                                    key={idx}
-                                    onClick={() => handleAnswer(idx)}
-                                    disabled={isAnswered}
-                                    className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center
-                                        ${!isAnswered ? 'bg-white border-stone-200 hover:border-green-400 hover:bg-green-50' : 
-                                          opt.isCorrect ? 'bg-emerald-50 border-emerald-500 text-emerald-900' : 
-                                          selectedAnswer === idx ? 'bg-red-50 border-red-400 text-red-800' : 'bg-white border-stone-200 opacity-50'
-                                        }`}
-                                >
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center mr-3 text-xs font-bold flex-shrink-0
-                                        ${!isAnswered ? 'bg-stone-100 text-stone-500' : 
-                                          opt.isCorrect ? 'bg-emerald-500 text-white' : 
-                                          selectedAnswer === idx ? 'bg-red-400 text-white' : 'bg-stone-100 text-stone-400'
-                                        }`}>
-                                        {String.fromCharCode(65 + idx)}
-                                    </div>
-                                    <span className="flex-1">{opt.text}</span>
-                                    
-                                    {isAnswered && opt.isCorrect && <span className="text-emerald-500 ml-2">✓</span>}
-                                    {isAnswered && selectedAnswer === idx && !opt.isCorrect && <span className="text-red-500 ml-2">✗</span>}
-                                </button>
-                            ))}
+                            <div class="font-black text-lg text-green-600 px-3">
+                                ${item.score}
+                            </div>
                         </div>
+                    `;
+                }).join('');
 
-                        {/* Penjelasan Muncul Setelah Menjawab */}
-                        {isAnswered && (
-                            <div className={`mt-5 p-4 rounded-xl border text-sm animate-[fadeIn_0.5s_ease-out]
-                                ${currentQ.options[selectedAnswer].isCorrect ? 'bg-emerald-100 border-emerald-200 text-emerald-800' : 'bg-orange-50 border-orange-200 text-orange-800'}`}>
-                                <p className="font-bold mb-1 flex items-center gap-2">
-                                    {currentQ.options[selectedAnswer].isCorrect ? '🎉 Tepat Sekali!' : '💡 Mari Pelajari Lagi'}
-                                </p>
-                                <p className="opacity-90">{currentQ.explanation}</p>
-                            </div>
-                        )}
-                    </Card>
+            }, (error) => {
+                console.error("Error fetching leaderboard:", error);
+                const listContainer = document.getElementById('leaderboard-list');
+                if(listContainer) {
+                    listContainer.innerHTML = `<div class="text-center py-4 text-red-500 text-sm">Gagal memuat papan peringkat.</div>`;
+                }
+            });
+            
+            // Note: Ideally, unsubscribe should be called when leaving the leaderboard view to save resources.
+            // For this simple single-page flow, it's acceptable here, but a real app would clean up.
+            document.getElementById('btn-back-from-lb').addEventListener('click', () => {
+                unsubscribe(); // Clean up listener when going back
+                renderIntro();
+            });
+        }
 
-                    {/* Navigasi Prev/Next diletakkan di bawah soal (bukan di navbar fixed) */}
-                    <div className="flex justify-between mt-2 mb-6 gap-3">
-                        <button 
-                            onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
-                            disabled={currentQuestion === 0}
-                            className="flex-1 bg-stone-200 text-stone-700 py-3 rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-transform">
-                            ⬅️ Sebelumnya
-                        </button>
-                        <button 
-                            onClick={() => {
-                                if (currentQuestion < quizData.length - 1) setCurrentQuestion(prev => prev + 1);
-                                else setShowResult(true);
-                            }}
-                            className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform shadow-md border border-green-700">
-                            {currentQuestion < quizData.length - 1 ? 'Berikutnya ➡️' : 'Lihat Hasil 🏆'}
-                        </button>
-                    </div>
-                </div>
-            );
-        };
+        // Jalankan aplikasi saat window load
+        window.addEventListener('load', initApp);
 
-        const App = () => {
-            const [view, setView] = useState('home');
-
-            // Map view to Title
-            const titles = {
-                home: 'Modul Bilangan Real',
-                himpunan: '1. Himpunan Bilangan',
-                operasi: '2. Operasi Bilangan',
-                pangkat: '3. Bilangan Berpangkat',
-                quiz_himpunan: 'Latihan: Himpunan',
-                quiz_operasi: 'Latihan: Operasi',
-                quiz_pangkat: 'Latihan: Pangkat',
-                chatbot: '🤖 TaniBot AI',
-                kuis_akhir: 'Uji Panen (Kuis Akhir)'
-            };
-
-            return (
-                <div className="flex flex-col flex-1 h-full bg-stone-100 relative">
-                    <Header title={titles[view]} onBack={view !== 'home' ? () => setView('home') : null} />
-                    
-                    {view === 'home' && <Home setView={setView} />}
-                    {view === 'himpunan' && <Himpunan setView={setView} />}
-                    {view === 'operasi' && <Operasi setView={setView} />}
-                    {view === 'pangkat' && <Pangkat setView={setView} />}
-                    
-                    {view === 'quiz_himpunan' && <QuizHimpunan setView={setView} />}
-                    {view === 'quiz_operasi' && <QuizOperasi setView={setView} />}
-                    {view === 'quiz_pangkat' && <QuizPangkat setView={setView} />}
-                    
-                    {view === 'kuis_akhir' && <KuisAkhir setView={setView} />}
-                    {view === 'chatbot' && <Chatbot />}
-
-                    {/* Bottom Navigation Utama (Selalu Tampil) */}
-                    <div className="absolute bottom-0 w-full bg-white border-t border-stone-200 flex justify-around p-3 pb-5 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                        <button onClick={() => setView('home')} className={`flex flex-col items-center flex-1 transition ${view === 'home' ? 'text-green-700 font-bold scale-110' : 'text-stone-400 hover:text-stone-600'}`}>
-                            <span className="text-xl mb-1">🏡</span>
-                            <span className="text-[10px]">Rumah</span>
-                        </button>
-                        <button onClick={() => setView('himpunan')} className={`flex flex-col items-center flex-1 transition ${['himpunan', 'operasi', 'pangkat', 'quiz_himpunan', 'quiz_operasi', 'quiz_pangkat'].includes(view) ? 'text-green-700 font-bold scale-110' : 'text-stone-400 hover:text-stone-600'}`}>
-                            <span className="text-xl mb-1">🌿</span>
-                            <span className="text-[10px]">Materi</span>
-                        </button>
-                        <button onClick={() => setView('kuis_akhir')} className={`flex flex-col items-center flex-1 transition ${view === 'kuis_akhir' ? 'text-green-700 font-bold scale-110' : 'text-stone-400 hover:text-stone-600'}`}>
-                            <span className="text-xl mb-1">🏆</span>
-                            <span className="text-[10px]">Uji Panen</span>
-                        </button>
-                        <button onClick={() => setView('chatbot')} className={`flex flex-col items-center flex-1 transition ${view === 'chatbot' ? 'text-green-700 font-bold scale-110' : 'text-stone-400 hover:text-stone-600'}`}>
-                            <span className="text-xl mb-1">🤖</span>
-                            <span className="text-[10px]">Chat AI</span>
-                        </button>
-                    </div>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
     </script>
 </body>
 </html>
