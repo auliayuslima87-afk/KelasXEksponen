@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuis Matematika Agribisnis - Pangkat & Akar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Background pola daun/pertanian sederhana menggunakan warna CSS */
+            background-color: #f0fdf4;
+            background-image: radial-gradient(#bbf7d0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+        .option-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .option-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .option-btn.selected {
+            background-color: #16a34a;
+            color: white;
+            border-color: #15803d;
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Styling untuk teks matematika */
+        .math {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 1.1em;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-gray-800 flex items-center justify-center p-4">
+
+    <!-- Container Utama -->
+    <div id="app-container" class="glass-panel w-full max-w-2xl rounded-2xl overflow-hidden animate-fade-in hidden">
+        
+        <!-- Header -->
+        <header class="bg-green-700 text-white p-6 text-center border-b-4 border-green-500">
+            <h1 class="text-2xl font-bold mb-1 flex items-center justify-center gap-2">
+                <span>🌱</span> Matematika Agribisnis <span>🌾</span>
+            </h1>
+            <p class="text-green-100 text-sm">Bentuk Pangkat & Bentuk Akar - Kelas X SMK</p>
+        </header>
+
+        <!-- Area Konten Dinamis -->
+        <main class="p-6 md:p-8" id="main-content">
+            <!-- Konten akan diisi oleh JavaScript -->
+        </main>
+
+        <!-- Notifikasi / Pesan Error Custom (Pengganti Alert) -->
+        <div id="toast-container" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 hidden z-50">
+            <div id="toast-message" class="bg-red-600 text-white px-6 py-3 rounded-full shadow-lg font-medium text-sm">
+                Pesan Error
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="global-loading" class="fixed inset-0 bg-white bg-opacity-80 flex flex-col items-center justify-center z-50">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-700 mb-4"></div>
+        <p class="text-green-800 font-medium">Menghubungkan ke sistem...</p>
+    </div>
+
+    <!-- Modul Firebase & Logika Aplikasi -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Konfigurasi & Variabel Global
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sim-matematika-agri';
+        let db, auth, currentUser;
+        
+        // State Aplikasi
+        const state = {
+            studentName: '',
+            studentClass: '',
+            currentQuestionIndex: 0,
+            score: 0,
+            answers: new Array(25).fill(null), // Menyimpan indeks jawaban yang dipilih
+            leaderboard: [],
+            timeLeft: 50 * 60 // 50 menit dalam detik
+        };
+
+        let timerInterval = null;
+
+        // Helper: Format Waktu (MM:SS)
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // Helper: Mulai Timer
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                state.timeLeft--;
+                
+                const timerDisplay = document.getElementById('timer-display');
+                if (timerDisplay) {
+                    timerDisplay.textContent = formatTime(state.timeLeft);
+                    // Peringatan visual jika waktu tersisa <= 5 menit
+                    if (state.timeLeft <= 300) { 
+                        timerDisplay.classList.remove('text-green-800');
+                        timerDisplay.classList.add('text-red-600', 'animate-pulse');
+                    }
+                }
+
+                if (state.timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    showToast("⏱️ Waktu Habis! Jawaban dikirim otomatis.");
+                    calculateAndSubmit();
+                }
+            }, 1000);
+        }
+
+        // Bank Soal (25 Soal Pangkat & Akar)
+        const fullQuestions = [
+            { q: "Nilai dari <span class='math'>2<sup>5</sup></span> adalah...", o: ["10", "16", "32", "64", "128"], a: 2 },
+            { q: "Bentuk sederhana dari <span class='math'>3<sup>2</sup> &times; 3<sup>4</sup></span> adalah...", o: ["<span class='math'>3<sup>6</sup></span>", "<span class='math'>3<sup>8</sup></span>", "<span class='math'>9<sup>6</sup></span>", "<span class='math'>9<sup>8</sup></span>", "<span class='math'>6<sup>6</sup></span>"], a: 0 },
+            { q: "Bentuk sederhana dari <span class='math'>a<sup>7</sup> / a<sup>3</sup></span> adalah...", o: ["<span class='math'>a<sup>10</sup></span>", "<span class='math'>a<sup>4</sup></span>", "<span class='math'>a<sup>3</sup></span>", "<span class='math'>a<sup>21</sup></span>", "<span class='math'>a<sup>-4</sup></span>"], a: 1 },
+            { q: "Hasil dari <span class='math'>(2<sup>3</sup>)<sup>2</sup></span> adalah...", o: ["<span class='math'>2<sup>5</sup></span>", "<span class='math'>2<sup>6</sup></span>", "<span class='math'>2<sup>9</sup></span>", "<span class='math'>4<sup>5</sup></span>", "<span class='math'>8<sup>3</sup></span>"], a: 1 },
+            { q: "Nilai dari <span class='math'>5<sup>0</sup></span> adalah...", o: ["0", "1", "5", "-1", "Tak terdefinisi"], a: 1 },
+            { q: "Hasil dari <span class='math'>2<sup>-3</sup></span> adalah...", o: ["-6", "-8", "1/6", "1/8", "8"], a: 3 },
+            { q: "Bentuk akar dari <span class='math'>x<sup>1/2</sup></span> adalah...", o: ["<span class='math'>x<sup>2</sup></span>", "<span class='math'>2x</span>", "<span class='math'>&radic;x</span>", "<span class='math'><sup>3</sup>&radic;x</span>", "<span class='math'>x<sup>-2</sup></span>"], a: 2 },
+            { q: "Hasil dari <span class='math'>&radic;144</span> adalah...", o: ["10", "12", "14", "16", "18"], a: 1 },
+            { q: "Bentuk sederhana dari <span class='math'>&radic;50</span> adalah...", o: ["<span class='math'>5&radic;2</span>", "<span class='math'>2&radic;5</span>", "<span class='math'>25&radic;2</span>", "<span class='math'>5&radic;10</span>", "<span class='math'>10&radic;5</span>"], a: 0 },
+            { q: "Hasil dari <span class='math'>3&radic;2 + 5&radic;2</span> adalah...", o: ["<span class='math'>8&radic;4</span>", "<span class='math'>15&radic;2</span>", "<span class='math'>8&radic;2</span>", "<span class='math'>15&radic;4</span>", "8"], a: 2 },
+            { q: "Hasil dari <span class='math'>&radic;12 &times; &radic;3</span> adalah...", o: ["<span class='math'>&radic;15</span>", "<span class='math'>&radic;36</span>", "6", "9", "12"], a: 2 },
+            { q: "Bentuk rasional dari <span class='math'>2 / &radic;3</span> adalah...", o: ["<span class='math'>(2&radic;3) / 3</span>", "<span class='math'>2&radic;3</span>", "<span class='math'>&radic;3 / 2</span>", "<span class='math'>(3&radic;3) / 2</span>", "<span class='math'>&radic;3</span>"], a: 0 },
+            { q: "Nilai <span class='math'>x</span> yang memenuhi persamaan <span class='math'>2<sup>x</sup> = 16</span> adalah...", o: ["2", "3", "4", "5", "6"], a: 2 },
+            { q: "Bentuk rasional dari <span class='math'>5 / (2 + &radic;3)</span> adalah...", o: ["<span class='math'>5(2 - &radic;3)</span>", "<span class='math'>10 - &radic;3</span>", "<span class='math'>5(2 + &radic;3)</span>", "<span class='math'>5</span>", "<span class='math'>-5(2 - &radic;3)</span>"], a: 0 },
+            { q: "Hasil dari <span class='math'>(3a<sup>2</sup>)<sup>3</sup></span> adalah...", o: ["<span class='math'>3a<sup>6</sup></span>", "<span class='math'>9a<sup>6</sup></span>", "<span class='math'>27a<sup>5</sup></span>", "<span class='math'>27a<sup>6</sup></span>", "<span class='math'>9a<sup>5</sup></span>"], a: 3 },
+            { q: "Jika <span class='math'>a = 4</span> dan <span class='math'>b = 9</span>, maka nilai dari <span class='math'>a<sup>1/2</sup> + b<sup>1/2</sup></span> adalah...", o: ["5", "7", "13", "36", "97"], a: 0 },
+            { q: "Bentuk sederhana dari <span class='math'>&radic;72 / &radic;2</span> adalah...", o: ["4", "5", "6", "7", "8"], a: 2 },
+            { q: "Hasil dari <span class='math'>2<sup>3</sup> &times; 2<sup>-1</sup></span> adalah...", o: ["1", "2", "4", "8", "16"], a: 2 },
+            { q: "Hasil dari <span class='math'>(x<sup>2</sup>y<sup>3</sup>)<sup>4</sup></span> adalah...", o: ["<span class='math'>x<sup>6</sup>y<sup>7</sup></span>", "<span class='math'>x<sup>8</sup>y<sup>12</sup></span>", "<span class='math'>x<sup>8</sup>y<sup>7</sup></span>", "<span class='math'>x<sup>2</sup>y<sup>12</sup></span>", "<span class='math'>xy<sup>24</sup></span>"], a: 1 },
+            { q: "Hasil perkalian <span class='math'>(2&radic;5)(3&radic;2)</span> adalah...", o: ["<span class='math'>5&radic;7</span>", "<span class='math'>6&radic;7</span>", "<span class='math'>5&radic;10</span>", "<span class='math'>6&radic;10</span>", "30"], a: 3 },
+            { q: "Sebuah lahan perkebunan kelapa sawit berbentuk persegi memiliki luas <span class='math'>10<sup>4</sup></span> m<sup>2</sup>. Jika di sekeliling lahan akan dipasang pagar, berapa meter panjang kawat yang dibutuhkan untuk satu putaran pagar?", o: ["100 m", "200 m", "400 m", "800 m", "1000 m"], a: 2 },
+            { q: "Pertumbuhan bakteri pembusuk pada buah tomat mengikuti rumus <span class='math'>N = 50 &times; 2<sup>t/2</sup></span>, dengan t dalam jam. Berapa jumlah bakteri setelah 6 jam?", o: ["100", "200", "300", "400", "500"], a: 3 },
+            { q: "Volume tangki penyemprot pupuk cair berbentuk kubus adalah <span class='math'>27 &times; 10<sup>3</sup></span> cm<sup>3</sup>. Panjang sisi tangki tersebut adalah...", o: ["3 cm", "9 cm", "30 cm", "90 cm", "300 cm"], a: 2 },
+            { q: "Sebuah bibit pohon mangga mengalami pertambahan tinggi sebesar <span class='math'>&radic;3</span> cm setiap minggu. Jika diamati selama <span class='math'>&radic;12</span> minggu, pertambahan tinggi total bibit tersebut adalah...", o: ["3 cm", "4 cm", "6 cm", "9 cm", "12 cm"], a: 2 },
+            { q: "Hasil panen jagung (dalam kuintal) dirumuskan dengan <span class='math'>P(t) = 10 &times; &radic;t</span>, di mana t adalah waktu tanam dalam bulan. Jika jagung dipanen setelah 16 bulan, hasil panennya adalah...", o: ["20 kuintal", "30 kuintal", "40 kuintal", "160 kuintal", "256 kuintal"], a: 2 }
+        ];
+
+        // Format label opsi (A, B, C, D, E)
+        const optionLabels = ['A', 'B', 'C', 'D', 'E'];
+
+        // UI Elements
+        const mainContent = document.getElementById('main-content');
+        const loadingScreen = document.getElementById('global-loading');
+        const appContainer = document.getElementById('app-container');
+
+        // Helper: Tampilkan Pesan Error
+        function showToast(message) {
+            const toastContainer = document.getElementById('toast-container');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.textContent = message;
+            toastContainer.classList.remove('hidden');
+            setTimeout(() => {
+                toastContainer.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Inisialisasi Firebase & Auth
+        async function initApp() {
+            try {
+                if (typeof __firebase_config === 'undefined') {
+                    throw new Error("Konfigurasi database tidak ditemukan.");
+                }
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Autentikasi
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                currentUser = auth.currentUser;
+                
+                // Sembunyikan loading, tampilkan aplikasi
+                loadingScreen.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                
+                // Render Halaman Awal
+                renderIntro();
+
+            } catch (error) {
+                console.error("Inisialisasi gagal:", error);
+                loadingScreen.innerHTML = `
+                    <div class="text-red-600 text-center p-6 bg-red-50 rounded-lg max-w-md">
+                        <span class="text-3xl block mb-2">⚠️</span>
+                        <h2 class="font-bold text-lg mb-2">Gagal Memuat Sistem</h2>
+                        <p class="text-sm">Gagal terhubung ke database. Silakan coba muat ulang halaman. (${error.message})</p>
+                    </div>`;
+            }
+        }
+
+        // Render Halaman 1: Identitas
+        function renderIntro() {
+            mainContent.innerHTML = `
+                <div class="text-center mb-6">
+                    <h2 class="text-xl font-semibold text-green-800 mb-2">Selamat Datang!</h2>
+                    <p class="text-gray-600 text-sm">Silakan isi identitas diri Anda sebelum memulai evaluasi.</p>
+                </div>
+                
+                <form id="intro-form" class="space-y-4">
+                    <div>
+                        <label for="student-name" class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
+                        <input type="text" id="student-name" required placeholder="Masukkan nama Anda" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition">
+                    </div>
+                    
+                    <div>
+                        <label for="student-class" class="block text-sm font-medium text-gray-700 mb-2">Pilih Kelas</label>
+                        <select id="student-class" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition bg-white appearance-none cursor-pointer">
+                            <option value="" disabled selected>Pilih kelas Anda...</option>
+                            <option value="X-A">Kelas X-A</option>
+                            <option value="X-B">Kelas X-B</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="w-full mt-6 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200 flex justify-center items-center gap-2">
+                        Mulai Kuis <span>🚀</span>
+                    </button>
+                    
+                    <button type="button" id="btn-view-leaderboard" class="w-full mt-2 bg-transparent text-green-700 hover:text-green-800 font-medium py-2 px-4 rounded-lg transition duration-200">
+                        Lihat Papan Peringkat (Leaderboard)
+                    </button>
+                </form>
+            `;
+
+            document.getElementById('intro-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('student-name').value.trim();
+                const studentClass = document.getElementById('student-class').value;
+                
+                if (name.length < 3) {
+                    showToast("Nama harus minimal 3 karakter.");
+                    return;
+                }
+
+                state.studentName = name;
+                state.studentClass = studentClass;
+                state.currentQuestionIndex = 0;
+                state.score = 0;
+                state.answers.fill(null);
+                state.timeLeft = 50 * 60; // Reset waktu menjadi 50 menit
+                
+                startTimer();
+                renderQuiz();
+            });
+
+            document.getElementById('btn-view-leaderboard').addEventListener('click', () => {
+                renderLeaderboard();
+            });
+        }
+
+        // Render Halaman 2: Kuis
+        function renderQuiz() {
+            const q = fullQuestions[state.currentQuestionIndex];
+            const progress = ((state.currentQuestionIndex) / fullQuestions.length) * 100;
+            const isLast = state.currentQuestionIndex === fullQuestions.length - 1;
+            
+            // Cek jika sudah dijawab sebelumnya (bisa dikembangkan utk fitur 'kembali', tp skrg maju saja)
+            const currentSelected = state.answers[state.currentQuestionIndex];
+
+            // Penentuan warna timer berdasarkan waktu sisa (Merah jika <= 5 menit)
+            const timerColorClass = state.timeLeft <= 300 ? 'text-red-600 animate-pulse' : 'text-green-800';
+
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-4 bg-green-50 p-3 rounded-xl border border-green-200 shadow-sm">
+                    <div class="text-sm font-semibold text-green-800 flex items-center gap-2">
+                        <span class="text-xl">⏱️</span> 
+                        <span>Waktu Sisa:</span>
+                        <span id="timer-display" class="text-lg font-bold ${timerColorClass}">${formatTime(state.timeLeft)}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 font-medium">${state.studentName} | ${state.studentClass}</div>
+                </div>
+
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-semibold text-green-700">Soal ${state.currentQuestionIndex + 1} dari ${fullQuestions.length}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-green-600 h-2.5 rounded-full transition-all duration-300" style="width: ${progress}%"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm mb-6 min-h-[120px] flex items-center">
+                    <p class="text-lg text-gray-800 w-full">${q.q}</p>
+                </div>
+
+                <div class="space-y-3" id="options-container">
+                    ${q.o.map((opt, index) => `
+                        <button class="option-btn w-full text-left p-4 border border-gray-200 rounded-xl hover:bg-green-50 focus:outline-none flex items-center gap-4 ${currentSelected === index ? 'selected' : 'bg-white'}" data-index="${index}">
+                            <span class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full border border-current text-sm font-bold">${optionLabels[index]}</span>
+                            <span class="flex-grow">${opt}</span>
+                        </button>
+                    `).join('')}
+                </div>
+
+                <div class="mt-8 flex justify-end">
+                    <button id="btn-next" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-6 rounded-lg shadow disabled:opacity-50 disabled:cursor-not-allowed transition" disabled>
+                        ${isLast ? 'Selesai & Kirim' : 'Selanjutnya ➔'}
+                    </button>
+                </div>
+            `;
+
+            const optionBtns = document.querySelectorAll('.option-btn');
+            const nextBtn = document.getElementById('btn-next');
+
+            // Set state awal tombol next jika sudah ada jawaban
+            if (currentSelected !== null) {
+                nextBtn.disabled = false;
+            }
+
+            optionBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    // Hapus kelas selected dari semua
+                    optionBtns.forEach(b => b.classList.remove('selected', 'bg-green-600', 'text-white', 'border-green-700'));
+                    
+                    // Tambah ke yg diklik
+                    this.classList.add('selected');
+                    
+                    // Simpan jawaban
+                    state.answers[state.currentQuestionIndex] = parseInt(this.getAttribute('data-index'));
+                    
+                    // Aktifkan tombol next
+                    nextBtn.disabled = false;
+                });
+            });
+
+            nextBtn.addEventListener('click', () => {
+                if (isLast) {
+                    calculateAndSubmit();
+                } else {
+                    state.currentQuestionIndex++;
+                    renderQuiz();
+                }
+            });
+        }
+
+        // Kalkulasi Skor dan Simpan ke Database
+        async function calculateAndSubmit() {
+            // Hentikan timer
+            clearInterval(timerInterval);
+
+            // Hitung skor (4 poin per soal, total 25 soal = 100 max)
+            state.score = 0;
+            state.answers.forEach((ans, idx) => {
+                if (ans === fullQuestions[idx].a) {
+                    state.score += 4;
+                }
+            });
+
+            // Tampilkan loading saat menyimpan
+            mainContent.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12 text-center">
+                    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-700 mb-4"></div>
+                    <h3 class="text-lg font-semibold text-green-800">Menyimpan hasil Anda...</h3>
+                    <p class="text-sm text-gray-500 mt-2">Mohon tunggu sebentar.</p>
+                </div>
+            `;
+
+            if (!currentUser) {
+                showToast("Sesi tidak valid. Tidak dapat menyimpan skor.");
+                renderResult();
+                return;
+            }
+
+            try {
+                // RULE 1: Strict Paths -> /artifacts/{appId}/public/data/{collectionName}
+                const leaderboardRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+                
+                await addDoc(leaderboardRef, {
+                    userId: currentUser.uid, // Simpan UID pengguna (walau anon)
+                    name: state.studentName,
+                    className: state.studentClass,
+                    score: state.score,
+                    timestamp: serverTimestamp()
+                });
+                
+                renderResult();
+            } catch (error) {
+                console.error("Gagal menyimpan skor:", error);
+                showToast("Terjadi kesalahan saat menyimpan data. Skor tetap ditampilkan.");
+                renderResult(); // Tetap tampilkan hasil meski gagal simpan
+            }
+        }
+
+        // Render Halaman 3: Hasil
+        function renderResult() {
+            let message = "";
+            let emoji = "";
+            
+            if (state.score >= 85) { message = "Luar Biasa! Pertahankan prestasimu."; emoji = "🏆"; }
+            else if (state.score >= 70) { message = "Kerja Bagus! Tingkatkan terus belajarmu."; emoji = "🌟"; }
+            else if (state.score >= 50) { message = "Cukup baik, tapi masih perlu banyak latihan."; emoji = "👍"; }
+            else { message = "Jangan menyerah! Pelajari lagi materinya dengan tekun."; emoji = "📚"; }
+
+            mainContent.innerHTML = `
+                <div class="text-center py-8">
+                    <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-green-100 text-5xl mb-4 shadow-inner">
+                        ${emoji}
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-1">Kuis Selesai!</h2>
+                    <p class="text-gray-600 mb-6">Terima kasih, <strong>${state.studentName}</strong> (${state.studentClass})</p>
+                    
+                    <div class="bg-white rounded-2xl border-2 border-green-200 p-6 max-w-sm mx-auto shadow-sm mb-6">
+                        <p class="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-1">Skor Akhir</p>
+                        <div class="text-5xl font-black text-green-600 mb-2">${state.score}</div>
+                        <p class="text-sm text-green-800 font-medium">${message}</p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                        <button id="btn-to-leaderboard" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-6 rounded-lg shadow transition">
+                            Lihat Leaderboard
+                        </button>
+                        <button id="btn-restart" class="bg-white hover:bg-gray-50 text-green-700 border border-green-300 font-semibold py-2.5 px-6 rounded-lg shadow-sm transition">
+                            Kembali ke Awal
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('btn-to-leaderboard').addEventListener('click', renderLeaderboard);
+            document.getElementById('btn-restart').addEventListener('click', renderIntro);
+        }
+
+        // Render Halaman 4: Leaderboard
+        function renderLeaderboard() {
+            // Tampilkan UI Loading List
+            mainContent.innerHTML = `
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-green-800 flex items-center gap-2">
+                        <span>🏆</span> Papan Peringkat
+                    </h2>
+                    <button id="btn-back-from-lb" class="text-sm text-green-600 hover:text-green-800 font-medium bg-green-50 px-3 py-1.5 rounded-md">
+                        Kembali
+                    </button>
+                </div>
+                <div id="leaderboard-list" class="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div class="text-center py-8 text-gray-500">Memuat data peringkat...</div>
+                </div>
+            `;
+
+            document.getElementById('btn-back-from-lb').addEventListener('click', renderIntro);
+
+            if (!currentUser) return;
+
+            // Ambil data (RULE 2: No Complex Queries, fetch all then sort in memory)
+            const leaderboardRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+            
+            // onSnapshot untuk data realtime
+            const unsubscribe = onSnapshot(leaderboardRef, (snapshot) => {
+                let data = [];
+                snapshot.forEach(doc => {
+                    data.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Sorting in memory (Score DESC, then Time ASC jika ada yg sama)
+                data.sort((a, b) => {
+                    if (b.score !== a.score) {
+                        return b.score - a.score;
+                    }
+                    // Jika skor sama, urutkan berdasarkan waktu submit lebih dulu (opsional, perlu timestamp valid)
+                    const timeA = a.timestamp ? a.timestamp.toMillis() : 0;
+                    const timeB = b.timestamp ? b.timestamp.toMillis() : 0;
+                    return timeA - timeB; 
+                });
+
+                // Tampilkan top 50 saja
+                const topData = data.slice(0, 50);
+                
+                const listContainer = document.getElementById('leaderboard-list');
+                if(!listContainer) return; // if user navigated away
+
+                if (topData.length === 0) {
+                    listContainer.innerHTML = `<div class="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">Belum ada data skor. Jadilah yang pertama!</div>`;
+                    return;
+                }
+
+                listContainer.innerHTML = topData.map((item, index) => {
+                    let rankBadge = `<span class="w-8 text-center font-bold text-gray-500">${index + 1}</span>`;
+                    if (index === 0) rankBadge = `<span class="w-8 text-center text-xl" title="Peringkat 1">🥇</span>`;
+                    if (index === 1) rankBadge = `<span class="w-8 text-center text-xl" title="Peringkat 2">🥈</span>`;
+                    if (index === 2) rankBadge = `<span class="w-8 text-center text-xl" title="Peringkat 3">🥉</span>`;
+
+                    // Highlight current user's entry (if matched by name/class for simplicity in this demo, ideally by userId if available in state)
+                    const isMe = (item.name === state.studentName && item.className === state.studentClass);
+                    const bgClass = isMe ? 'bg-green-100 border-green-300' : 'bg-white border-gray-100';
+
+                    return `
+                        <div class="flex items-center justify-between p-3 border rounded-lg ${bgClass} shadow-sm transition hover:shadow-md">
+                            <div class="flex items-center gap-3">
+                                ${rankBadge}
+                                <div>
+                                    <div class="font-semibold text-gray-800 ${isMe ? 'text-green-800' : ''}">${item.name}</div>
+                                    <div class="text-xs text-gray-500">Kelas ${item.className}</div>
+                                </div>
+                            </div>
+                            <div class="font-black text-lg text-green-600 px-3">
+                                ${item.score}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            }, (error) => {
+                console.error("Error fetching leaderboard:", error);
+                const listContainer = document.getElementById('leaderboard-list');
+                if(listContainer) {
+                    listContainer.innerHTML = `<div class="text-center py-4 text-red-500 text-sm">Gagal memuat papan peringkat.</div>`;
+                }
+            });
+            
+            // Note: Ideally, unsubscribe should be called when leaving the leaderboard view to save resources.
+            // For this simple single-page flow, it's acceptable here, but a real app would clean up.
+            document.getElementById('btn-back-from-lb').addEventListener('click', () => {
+                unsubscribe(); // Clean up listener when going back
+                renderIntro();
+            });
+        }
+
+        // Jalankan aplikasi saat window load
+        window.addEventListener('load', initApp);
+
+    </script>
+</body>
+</html>
